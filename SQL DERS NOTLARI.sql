@@ -294,7 +294,7 @@ SELECT COALESCE(NULL, NULL, 'ALÝ', NULL) ---NULL olmayan ilk deðeri getiriyor
 
 SELECT NULLIF(0, 0) --iki deðer birbirine eþitse Null deðer döndürecektir.
 
-SELECT phone, ISNULL(PHONE, 0), nullýf (ISNULL(phone, 0), '0')
+SELECT phone, ISNULL(PHONE, 0), NULLIF (ISNULL(phone, 0), '0')
 FROM sale.customer
 
 
@@ -315,7 +315,7 @@ WHERE email
 LIKE '%@yahoo.com'
 
 SELECT count(*) as cnt_cust
-FROM sale.cutomer
+FROM sale.customer
 WHERE email
 LIKE '%yahoo%'
 
@@ -685,5 +685,622 @@ FROM	sale.sales_summary
 GROUP BY
 		CUBE(Brand, Category)
 ORDER BY 2
+
+BU KISMI DOLDUR ÝLK DERS KODLARIYLA
+----------/////////////SUBQUERIES/////////////////////--------------------------
+
+--Example: Write a query that shows all employees in the store where Davis Thomas works.
+
+SELECT store_id
+FROM sale.staff
+WHERE first_name = 'Davis'
+AND last_name = 'Thomas'
+
+SELECT *
+FROM sale.staff
+WHERE store_id = (SELECT store_id
+				  FROM sale.staff
+				  WHERE first_name = 'Davis'
+				  AND last_name = 'Thomas')
+
+
+---Example: Write a query that shows the employees for whom Charles Cussona is a  first-degree manager.
+---(To which employees are Charles Cussona a first-degree manager?)
+
+SELECT *
+FROM sale.staff
+WHERE manager_id = (SELECT staff_id
+				  FROM sale.staff
+				  WHERE first_name = 'Charles'
+				  AND last_name = 'Cussona')
+
+---Example: Write a query that returns the customers located where 'The BFLO Store' is located.
+
+SELECT *
+FROM sale.store
+WHERE store_name = 'The BFLO Store'
+
+SELECT *
+FROM sale.customer
+WHERE city = 'Buffalo'
+
+
+SELECT *
+FROM sale.customer
+WHERE city = (SELECT city
+			  FROM sale.store
+			  WHERE store_name  = 'The BFLO Store')
+
+---Example: Write a query that returns the list of products that are more expensive than the product named 'Pro-Series 49-Class Full HD Outdoor LED TV (Silver)'
+SELECT *
+FROM product.product
+WHERE list_price >
+(SELECT list_price
+FROM product.product
+WHERE product_name = 'Pro-Series%')
+
+---Example: Write a query that returns customer first names, last names and order dates.
+---The customers who are order on the same dates as Laural Goldammer.
+
+SELECT *
+FROM sale.orders A, sale.customer B
+WHERE A.customer_id = B.customer_id
+AND B.first_name = 'Laurel'
+AND B.last_name = 'Goldammer'
+
+SELECT B.first_name, B.last_name, A.order_date
+FROM sale.orders A, sale.customer B
+WHERE A.customer_id = B.customer_id
+AND A.order_date IN ( SELECT order_date                      -----IN yerine ANY de kullanabiliriz.
+					 FROM sale.orders A, sale.customer B
+					 WHERE A.customer_id = B.customer_id
+				   	 AND B.first_name = 'Laurel'
+					 AND B.last_name = 'Goldammer')
+
+---Example: List the products that ordered in the last 10 orders in Bufalo city.
+
+SELECT TOP 10 order_id
+FROM sale.customer A, sale.orders B
+WHERE A.city = 'Buffalo'
+AND A.customer_id = B.customer_id
+ORDER BY order_id DESC
+
+
+SELECT DISTINCT A.order_id, B.product_name
+FROM sale.order_item A, product.product B
+WHERE order_id IN ( SELECT TOP 10 order_id
+					FROM sale.customer A, sale.orders B
+					WHERE city = 'Buffalo'
+					AND A.customer_id = B.customer_id
+					ORDER BY order_id DESC )
+
+AND A.product_id = B.product_id
+
+---Example:Write a query that returns the list of product names that were made in 2020
+---and whose prices are higher than maximum product list price of Receivers Amplifiers category.
+---(Receivers Amplifiers kategorisindeki en yüksek fiyatlý üründen daha pahalý olan 2020 model ürünleri getiriniz.)
+
+SELECT *
+FROM product.product A, product.category B
+WHERE A.category_id = B.category_id
+AND B.category_name = 'Receivers Amplifiers'
+ORDER BY list_price DESC
+
+
+SELECT *
+FROM product.product
+WHERE model_year = '2020' and list_price > ALL (SELECT list_price
+												FROM product.product A, product.category B
+												WHERE A.category_id = B.category_id
+												AND B.category_name = 'Receivers Amplifiers'
+												)---Subquery nin içinde genel olarak ORDER BY kullanamýyoruz fakat bazý istisnalarý var.
+
+
+
+-----------------------/////////////CORRELATED SUBQUERIES/////////////////////--------------------------
+
+---iÇ SORGU ÝLE DIÞ SORGUNUN EÞÝTLENMESÝ, BÝRLEÞTÝRÝLMESÝDÝR.
+
+---Write a query that returns a list of States where 'Apple - Pre-Owned ipad3 - 32GB - White' product is not ordered
+
+/*
+customer tablosundan state'leri getiren bir sorgumuz var fakat gelecek olan state'ler WHERE kýsmýndaki koþula göre listelenecek.
+Buna göre: NOT EXIST kullandýðýmýz için; product_name deðeri 'Apple - Pre-Owned iPad 3...' DEÐÝL ÝSE ilgilli state listelenecektir.
+
+EXIST kullandýðýn zaman; subquery herhangi bir sonuç döndürürse üstteki query'i ÇALIÞTIR anlamýna geliyor.
+NOT EXIST ; subquery herhangi bir sonuç döndürürse üstteki query'i ÇALIÞTIRMA anlamýna geliyor.
+*/
+SELECT DISTINCT state
+FROM sale.customer X
+WHERE NOT EXISTS (SELECT 2
+				 FROM product.product A, sale.order_item B, sale.orders C, sale.customer D
+				 WHERE product_name = 'Apple - Pre-Owned iPad 3 - 32GB - White'
+				 AND A.product_id = B.product_id
+				 AND B.order_id = C.order_id
+				 AND C.customer_id = D.customer_id
+					)
+
+SELECT DISTINCT state
+FROM sale.customer X
+WHERE NOT EXISTS (SELECT 1
+				 FROM product.product A, sale.order_item B, sale.orders C, sale.customer D
+				 WHERE product_name = 'Apple - Pre-Owned iPad 3 - 32GB - White'
+				 AND A.product_id = B.product_id
+				 AND B.order_id = C.order_id
+				 AND C.customer_id = D.customer_id
+				 AND D.state = X.state
+					)
+
+
+
+SELECT DISTINCT state
+FROM sale.customer X
+WHERE EXISTS (	 SELECT 3
+				 FROM product.product A, sale.order_item B, sale.orders C, sale.customer D
+				 WHERE product_name = 'Apple - Pre-Owned iPad 3 - 32GB - White'
+				 AND A.product_id = B.product_id
+				 AND B.order_id = C.order_id
+				 AND C.customer_id = D.customer_id
+				 AND D.state = X.state
+					)
+
+---Write a query that returns stock information of the products in Davi techno Retail store. The BFLO Store hasn't got any stock of that products.
+
+SELECT Y. *
+FROM sale.store X, product.stock Y
+WHERE X.store_id = Y.store_id
+AND X.store_name = 'Davi techno Retail'
+AND EXISTS (
+			SELECT A.*
+			FROM product.stock A, sale.store B
+			WHERE A.store_id = B.store_id 
+			AND B.store_name = 'The BFLO Store'
+			AND A.quantity = 0
+			AND Y.product_id = A.product_id
+			)
+
+---NOT EXIST ÝLE:
+SELECT Y. *
+FROM sale.store X, product.stock Y
+WHERE X.store_id = Y.store_id
+AND X.store_name = 'Davi techno Retail'
+AND NOT EXISTS (
+			SELECT A.*
+			FROM product.stock A, sale.store B
+			WHERE A.store_id = B.store_id 
+			AND B.store_name = 'The BFLO Store'
+			AND A.quantity > 0
+			AND Y.store_id = A.store_id
+			)
+
+---------------/////////////////////////CTE////////////////////////////----------------------------------
+
+/*
+COMMON TABLE ESPRESSIONS (CTE), baþka bir SELECT, INSERT, DELETE veya UPDATE deyiminde baþvurabileceðiniz veya içinde kullanabileceðiniz geçici bir sonuç kümesidir.
+Baþka bir SQL sorgusu içinde tanýmlayabileceðiniz bir sorgudur. Bu nedenle, diðer sorgular CTE'yi bir tablo gibi kullanabilir.
+CTE, daha büyük bir sorguda kullanýlmak üzere yardýmcý ifadeler yazmamýzý saðlar.
+*/
+
+---Example: List customer who have an order prior to the last order of a customer named Jerald Berray and are residents of the city of Austin.
+WITH T1 AS ----T1 tablosu olarak bu sorguyu kullan demek.
+(
+SELECT MAX(order_date) last_order_date
+FROM sale.customer A, sale.orders B
+WHERE A.customer_id = B.customer_id
+AND A.first_name = 'Jerald'
+AND A.last_name = 'Berray'
+)
+SELECT DISTINCT A.customer_id, A.first_name, A.last_name
+FROM sale.customer A, sale.orders B, T1
+WHERE A.customer_id = B.customer_id
+AND T1.last_order_date > B.order_date
+AND A.city = 'Austin'
+
+
+---Example: List all customers theirs orders are on the same dates with Laurel Goldammer.
+
+WITH T1 AS last_order_date
+(
+SELECT B.order_date
+FROM sale.customer A, sale.orders B
+WHERE A.customer_id = B.customer_id
+AND first_name = 'Laurel' 
+AND last_name = 'Goldammer'
+)
+
+SELECT	DISTINCT A.customer_id, A.first_name, A.last_name
+FROM	sale.customer A, sale.orders B, T1
+WHERE	A.customer_id = B.customer_id
+AND		T1.last_order_date = B.order_date
+ 
+
+ /*CTE, Subquery mantýðý ile ayný. Subquery'de içerde bir tablo ile ilgileniyorduk CTE'de yukarda yazýyoruz.
+Sadece WITH kýsmýný yazarsan tek baþýna çalýþmaz. WITH ile belirttiðim query'yi birazdan kullanacaðým demek bu.  Asýl SQL statementimin içinde bunu kullanýyoruz.
+WITH ile yukarda tablo oluþturuyor, aþaðýda da SELECT FROM ile bu tabloyu kullanýyor. */
+
+
+--------------/////RECURSIVE CTE's//////////-----------------------------------
+---Example: Create a table with a number in each row in ascending order from 0 to 9.
+
+WITH T1 AS
+(
+	SELECT 0 AS NUMBER
+	UNION ALL
+	SELECT NUMBER +1
+	FROM T1
+	WHERE NUMBER < 9
+)
+SELECT *
+FROM T1
+
+---Example: List the stores whose turnovers are under the average store turnovers in 2018.
+---2018 yýlýnda tüm maðaalar ortalama 160 bin dolar ciro elde etmiþler.(total_amount). Fakat Burkers Outlet ve Davi techno Retail ortalamanýn altýnda kalmýþ.
+
+WITH T1 AS
+(
+SELECT C.store_name, SUM(quantity*list_price*(1-discount)) turnover_of_stores
+FROM sale.order_item A, sale.orders B, sale.store C
+WHERE A.order_id = B.order_id
+AND B.store_id = C.store_id
+AND YEAR(B.order_date) = 2018
+GROUP BY C.store_id, C.store_name ---SELECT e C.store_id yazmadýk ama storeid ye göre gruplamasýný söyleyebiliriz. sadece ekrana getirmeyecek gruplamayý yapacak.
+),
+T2 AS
+(
+SELECT AVG(turnover_of_stores) Avg_turnover_2018
+FROM T1
+)
+SELECT *
+FROM T1, T2
+WHERE T1.turnover_of_stores > T2.Avg_turnover_2018
+
+
+---Example: Write a query that creates a new column named 'total_price' calculating the total prices of the products on each order.
+
+SELECT order_id, 
+	(
+		SELECT SUM(list_price)
+		FROM sale.order_item A
+		WHERE A.order_id = B.order_id
+	)
+FROM sale.orders B
+
+------------------//////////////////////////SET OPERATORS///////////////////////////-----------------------------
+--Set operatörlerde iki veya daha fazla tabloyu birleþtirmeye çalýþýyoruz.
+
+---Example: Write a query that creates a new  column named 'total_price' calculating the total prices of the products on each order.
+
+--103 ürün var
+SELECT DISTINCT D.product_name
+FROM sale.customer A, sale.orders B, sale.order_item C, product.product D
+WHERE A.customer_id = B.customer_id
+AND B.order_id = C.order_id
+AND C.product_id = D.product_id
+AND A.city = 'Aurora'
+
+UNION
+
+--75
+SELECT DISTINCT D.product_name
+FROM sale.customer A, sale.orders B, sale.order_item C, product.product D
+WHERE A.customer_id = B.customer_id
+AND B.order_id = C.order_id
+AND C.product_id = D.product_id
+AND A.city = 'Charlotte'
+
+--Normalde 103+75 = 178 satýr gelmesi gerekiyordu fakat 132 satýr geldi. Çünkü tekrarlý olanlarý tabloya getirmedi.
+
+
+---Write a query that returns all customers whose  first or last name is Thomas.  (don't use 'OR')
+---INTERSECT-----
+SELECT first_name, last_name
+FROM sale.customer
+WHERE first_name = 'Thomas'
+UNION ALL
+SELECT first_name, last_name
+FROM sale.customer
+WHERE last_name = 'Thomas'
+
+
+---Write a quary that returns all brands with products for both 2018 and 2020 model year.
+
+SELECT	DISTINCT B.brand_id, B.brand_name
+FROM	product.product A, product.brand B
+WHERE	model_year = 2018
+AND		A.brand_id = B.brand_id
+INTERSECT
+SELECT	DISTINCT B.brand_id, B.brand_name
+FROM	product.product A, product.brand B
+WHERE	model_year = 2020
+AND		A.brand_id = B.brand_id
+----
+--SELECT	DISTINCT B.brand_id, B.brand_name, model_year
+--FROM	product.product A, product.brand B
+--WHERE	model_year = 2018
+--AND		A.brand_id = B.brand_id
+--INTERSECT
+--SELECT	DISTINCT B.brand_id, B.brand_name, model_year
+--FROM	product.product A, product.brand B
+--WHERE	model_year = 2020
+--AND		A.brand_id = B.brand_id
+
+
+
+---- Write a query that returns the first and the last names of the customers who placed orders in all of 2018, 2019, and 2020.
+
+SELECT customer_id, first_name, last_name
+FROM sale.customer
+WHERE customer_id IN  (
+
+							SELECT DISTINCT customer_id
+							FROM sale.orders 
+							WHERE  order_date BETWEEN '2018-01-01' AND '2018-12-31'
+
+							INTERSECT
+
+							SELECT DISTINCT customer_id
+							FROM sale.orders 
+							WHERE  order_date BETWEEN '2019-01-01' AND '2019-12-31'
+
+							INTERSECT
+
+							SELECT DISTINCT customer_id
+							FROM sale.orders 
+							WHERE  order_date BETWEEN '2019-01-01' AND '2019-12-31'
+					)
+
+---Example: Write a query that returns the brands have 2018 model products but not 2019 model produtcs.
+----EXCEPT, iki farklý sql sorgusundan birinin sonuç kümesinde olup diðerinin sonuç kümesinde olmayan kayýtlarý listeleyen bir komuttur.
+
+SELECT B.brand_id, B.brand_name
+FROM product.product A, product.brand B
+WHERE A.brand_id = B.brand_id
+AND A.model_year = 2018
+
+EXCEPT
+
+SELECT B.brand_id, B.brand_name
+FROM product.product A, product.brand B
+WHERE A.brand_id = B.brand_id
+AND A.model_year = 2019
+
+-----Example: Write a query that contains only products ordered in 2019 (Result not include products ordered in other years)
+
+WITH T1 AS
+(
+SELECT	DISTINCT A.product_id
+FROM	sale.order_item A, sale.orders B
+WHERE	A.order_id = B.order_id
+AND		YEAR(B.order_date) = 2019
+EXCEPT
+SELECT	DISTINCT A.product_id
+FROM	sale.order_item A, sale.orders B
+WHERE	A.order_id = B.order_id
+AND		YEAR(B.order_date) <> 2019
+)
+SELECT	A.product_id, A.product_name
+FROM	T1, product.product A
+WHERE	T1.product_id = A.product_id
+
+
+-------/////////////////////CASE EXPRESSION//////////////-------------------
+---SIMPLE CASE EXPRESSION ÝLE ÇÖZÜM: 
+SELECT order_id, order_status,
+	   CASE order_status
+		   WHEN 1 THEN 'Pending'
+		   WHEN 2 THEN 'Processing'
+		   WHEN 3 THEN 'Rejected'
+		   ELSE 'Completed'
+	   END AS ord_status_mean
+FROM sale.orders
+
+
+---SEARCH CASE EXPRESSION ÝLE ÇÖZÜM: 
+
+SELECT order_id, order_status,
+	   CASE order_status
+		   WHEN 1 THEN 'Pending'
+		   WHEN 2 THEN 'Processing'
+		   WHEN 3 THEN 'Rejected'
+		   ELSE 'Completed'
+	   END AS ord_status_mean
+FROM sale.orders
+
+
+----Example: Create a new column that shows which email service provider ("Gmail", "Hotmail", "Yahoo" or "Other" ).
+
+SELECT customer_id, first_name, last_name, email,
+		CASE WHEN email LIKE '%gmail.com%' THEN 'Gmail'
+			 WHEN email LIKE '%hotmail.com%' THEN 'Hotmail'
+			 WHEN email LIKE '%yahoo.com%' THEN 'Yahoo'
+			 ELSE 'Other'
+		END AS email_service_provider
+FROM sale.customer
+
+---ÖDEV
+---If you have extra time you can ask following question.
+-- Write a query that gives the first and last names of customers who have ordered products from the computer accessories, speakers, and mp4 player categories in the same order.
+
+----Example:
+
+SELECT
+		SUM(CASE WHEN DATENAME(DW, order_date) = 'Sunday' THEN 1 ELSE 0 END ) AS Sunday,
+		SUM(CASE WHEN DATENAME(DW, order_date) = 'Monday' THEN 1 ELSE 0 END )AS Monday,
+		SUM(CASE WHEN DATENAME(DW, order_date) = 'Tuesday' THEN 1 ELSE 0 END )AS Tuesday,
+		SUM(CASE WHEN DATENAME(DW, order_date) = 'Wednesday' THEN 1 ELSE 0 END) AS Wednesday,
+		SUM(CASE WHEN DATENAME(DW, order_date) = 'Thursday' THEN 1 ELSE 0 END )AS Thursday,
+		SUM(CASE WHEN DATENAME(DW, order_date) = 'Friday' THEN 1 ELSE 0 END) AS Friday,
+		SUM(CASE WHEN DATENAME(DW, order_date) = 'Saturday' THEN 1 ELSE 0 END )AS Saturday
+FROM sale.orders
+WHERE DATEDIFF(DAY, order_date, shipped_date) > 2
+
+-------------------------///////////////////WINDOW FUNCTIONS//////////////////////-------------------------------------
+
+--GROUP BY--> distinct kullanmýyoruz, distinct'i zaten kendi içinde yapýyor
+--Window Funct.--> optioanal olarak yapabiliyoruz.
+--GROUP BY -->  aggregate mutlaka gerekli,
+--Window Funct.> aggregate optional
+--GROUP BY --> Ordering invalid
+--Window Funct.--> ordering valid
+--GROUP BY --> performansý düþük
+--Window Funct.--> performanslý
+--WINDOW FUNCTION:
+--Veri setinde mevcut satýrla bir þekilde iliþkili olan bir dizi satýrda bir iþlem gerçekleþtirmemizi saðlar.
+--Group by fonksiyonundan farklý olarak diðer satýrlardaki verileri de hesaplamaya dahil edebiliriz.
+--Hareketli ortalama-kümülatif toplam gibi iþlemleri bu fonksiyonlarla grup bazýnda kolayca yapabiliriz.
+
+--WINDOW FUNCTIONlarda
+--3 farklý bileþen kullanýlýr;
+--PARTITION BY : Veriyi gruplara ayýrýr. Opsiyoneldir.
+--ORDER BY : Her bir grup için satýrlarýn sýralamasýný yapmayý saðlar. Zorunludur.
+--ROW_veya_RANGE : Veri gruplarýnýn tüm verisi ile deðil belirli bir alandaki verileri için hesaplama yapabilmemizi saðlar. 
+--Özellikle hareketli ortalama hesaplayabilmek için çok kullanýþlýdýr. Opsiyoneldir.
+
+----Example: Ürünlerin stock bilgilerini getirin
+
+SELECT product_id, SUM(quantity) TOTAL_QUANTITY
+FROM product.stock
+GROUP BY product_id
+ORDER BY 1
+
+SELECT DISTINCT product_id, SUM(quantity) OVER (PARTITION BY product_id) TOTAL_QUANTITY
+FROM product.stock
+
+----Example: Markalara göre ortalama ürün fiyatýný çýkarýn.
+
+SELECT *, AVG(list_price) OVER (PARTITION BY brand_id)
+FROM product.product
+
+SELECT	category_id, product_id,
+		COUNT(*) OVER() NOTHING,
+		COUNT(*) OVER(PARTITION BY category_id) countofprod_by_cat,
+		COUNT(*) OVER(PARTITION BY category_id ORDER BY product_id) countofprod_by_cat_2,
+		COUNT(*) OVER(PARTITION BY category_id ORDER BY product_id ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) prev_with_current,
+		COUNT(*) OVER(PARTITION BY category_id ORDER BY product_id ROWS BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING) current_with_following,
+		COUNT(*) OVER(PARTITION BY category_id ORDER BY product_id ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) whole_rows,
+		COUNT(*) OVER(PARTITION BY category_id ORDER BY product_id ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING) specified_columns_1,
+		COUNT(*) OVER(PARTITION BY category_id ORDER BY product_id ROWS BETWEEN 2 PRECEDING AND 3 FOLLOWING) specified_columns_2
+FROM	product.product
+ORDER BY category_id, product_id
+
+
+--Write a query that gives the first and last names of customers who have ordered products from the computer accessories, speakers, and mp4 player categories in the same order.
+
+SELECT brand_id, model_year
+	  ,COUNT(*) OVER(PARTITION BY brand_id ORDER BY model_year)
+	  ,COUNT(*) OVER(PARTITION BY brand_id ORDER BY model_year RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) --default frame
+	  ,COUNT(*) OVER(PARTITION BY brand_id ORDER BY model_year ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)
+	  ,COUNT(*) OVER(PARTITION BY brand_id ORDER BY model_year ROWS BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING)
+FROM product.product
+
+
+SELECT brand_id, model_year, list_price
+	  ,SUM(list_price) OVER(PARTITION BY brand_id ORDER BY model_year ROWS BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING)
+FROM product.product
+
+SELECT brand_id, model_year
+	  ,COUNT(*) OVER(PARTITION BY brand_id ORDER BY model_year RANGE BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING)
+FROM product.product
+ORDER BY model_year
+
+SELECT brand_id, model_year
+	  ,COUNT(*) OVER(PARTITION BY brand_id ORDER BY product_id ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) whole_rows
+FROM product.product
+
+
+---Example: What is the cheapest product price for each category?
+
+SELECT DISTINCT category_id,
+	   MIN(list_price) OVER(PARTITION BY category_id)
+FROM product.product
+ORDER BY  category_id
+
+---Example: How many different product in the product table?
+
+SELECT	DISTINCT COUNT (product_id)  OVER ()
+FROM	product.product
+
+---Example: How many different product in order_item table?
+
+SELECT COUNT(DISTINCT product_id)
+FROM sale.order_item
+
+
+SELECT DISTINCT COUNT(product_id) OVER() ---Bu iþlemin sonucundaki 4722 sayý kadar farklý product_id yok. Ek bir iþlem yapmamýz lazým.
+FROM sale.order_item
+
+
+SELECT DISTINCT COUNT(product_id) OVER()
+FROM sale.order_item
+
+---Example: Write a query that returns how many products are in each order?
+
+SELECT DISTINCT order_id, SUM(quantity) OVER(PARTITION BY order_id) num_of_prod
+FROM sale.order_item 
+
+---Example: Write a query that returns the number of products in each categroy of brands.
+
+SELECT DISTINCT category_id, brand_id, COUNT(product_id) OVER(PARTITION BY category_id, brand_id)
+FROM product.product
+ORDER BY category_id, brand_id
+
+---Example: Write a query that returns one of the most stocked product in each store.
+
+SELECT *
+FROM product.stock
+ORDER BY store_id, quantity DESC
+
+SELECT DISTINCT store_id, FIRST_VALUE(product_id) OVER (PARTITION BY store_id ORDER BY quantity DESC) most_stocked_prod
+FROM product.stock
+
+
+SELECT DISTINCT store_id, FIRST_VALUE(product_id) OVER (PARTITION BY store_id ORDER BY quantity DESC ROWS BETWEEN 1 PRECEDING AND CURRENT ROW) most_stocked_prod
+FROM product.stock
+
+
+SELECT *, FIRST_VALUE(product_id) OVER (PARTITION BY store_id ORDER BY quantity DESC RANGE BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING) most_stocked_prod
+FROM product.stock
+
+---Example: Write a query that returns customers and their most valuable order with total amount of it.
+
+SELECT A.customer_id, first_name, last_name, B.order_id,
+	   SUM(quantity*list_price*(1-discount)) total_amount
+FROM sale.customer A, sale.orders B, sale.order_item C
+WHERE A.customer_id = B.customer_id
+AND B.order_id = C.order_id
+GROUP BY A.customer_id, first_name, last_name, B.order_id
+ORDER BY 1, 5 DESC
+
+
+WITH T1 AS
+(
+SELECT A.customer_id, first_name, last_name, B.order_id,
+	   SUM(quantity*list_price*(1-discount)) total_amount
+FROM sale.customer A, sale.orders B, sale.order_item C
+WHERE A.customer_id = B.customer_id
+AND B.order_id = C.order_id
+GROUP BY A.customer_id, first_name, last_name, B.order_id
+)
+
+SELECT DISTINCT customer_id, first_name, last_name, FIRST_VALUE(order_id) OVER(PARTITION BY customer_id ORDER BY total_amount DESC) most_value_order,
+				FIRST_VALUE(total_amount) OVER(PARTITION BY customer_id ORDER BY total_amount DESC) total_amount
+FROM T1
+
+
+---Example: Write a query that returns first order date by month.
+
+SELECT DISTINCT YEAR(order_date) YEAR, MONTH(order_date) MONTH,
+				FIRST_VALUE(order_date) OVER(PARTITION BY YEAR(order_date), MONTH(order_date) ORDER BY order_date ) first_order_date_of_year_and_month
+FROM sale.orders
+
+
+---Example: Write a query that returns most stocked product in each store. (Use Last_Value)
+
+SELECT DISTINCT store_id,
+		FIRST_VALUE(product_id) OVER( PARTITION BY store_id ORDER BY quantity DESC),
+		LAST_VALUE(product_id) OVER( PARTITION BY store_id ORDER BY quantity, product_id DESC RANGE BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) 
+FROM product.stock
+
+
 
 

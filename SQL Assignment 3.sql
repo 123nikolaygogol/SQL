@@ -24,7 +24,6 @@ WITH T1 AS
 SELECT DISTINCT B.product_id, B.product_name, C.order_id, C.quantity, C.discount
 FROM  product.product B, sale.order_item C
 WHERE B.product_id = C.product_id
-AND B.product_id = 4
 GROUP BY  B.product_id, B.product_name, C.order_id, C.quantity, C.discount
 ), T2 AS
 

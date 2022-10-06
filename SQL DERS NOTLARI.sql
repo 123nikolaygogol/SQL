@@ -1302,5 +1302,173 @@ SELECT DISTINCT store_id,
 FROM product.stock
 
 
+--Write a query that returns the order date of the one previous sale of each staff(use the LAG function)
+
+SELECT A.staff_id, A.first_name, A.last_name, B.order_id, B.order_date,
+	   LAG(order_date) OVER(PARTITION BY A.staff_id ORDER BY order_id) prev_order_date
+FROM sale.staff A, sale.orders B
+WHERE A.staff_id = B.staff_id
+
+
+---Example: Assign an ordinal number to the product prices for each category in ascending order
+
+SELECT *
+FROM
+(
+SELECT category_id, list_price, ROW_NUMBER() OVER(PARTITION BY category_id ORDER BY list_price) ord_number
+FROM product.product
+) A
+WHERE ord_number < 4
+
+
+---------RANK/DENSE_RANK------------------
+SELECT category_id, list_price,
+	   ROW_NUMBER() OVER(PARTITION BY category_id ORDER BY list_price) RWN,
+	   RANK() OVER(PARTITION BY category_id ORDER BY list_price) RNK,
+	   DENSE_RANK() OVER(PARTITION BY category_id ORDER BY list_price) DNS_RNK
+FROM product.product
+
+
+---Example: Write a query that returns both of the followings:
+--*The average product price
+--*The average product price by orders.
+
+SELECT DISTINCT order_id,
+	   AVG(list_price)  OVER() Avg_price, 
+	   AVG(list_price) OVER(PARTITION BY order_id) Avg_price_by_orders
+FROM sale.order_item
+
+
+
+SELECT DISTINCT order_id,
+	   AVG(list_price)  OVER() Avg_price, 
+	   AVG(list_price) OVER(PARTITION BY order_id) Avg_price_by_orders
+FROM sale.order_item
+
+
+---Example: Which order's average product price is lower than the overall average price?
+
+WITH T1 AS
+(
+SELECT DISTINCT order_id,
+	   AVG(list_price) OVER() Avg_price,
+	   AVG(list_price) OVER(PARTITION BY order_id) Avg_price_by_order
+FROM sale.order_item
+)
+SELECT *
+FROM T1
+WHERE Avg_price_by_order <  Avg_price
+ORDER BY 3 DESC
+
+---Example: Calculate the stores' weekly cumulative number of orders for 2018.
+
+SELECT DISTINCT A.store_id, A.store_name,
+	   DATEPART(WEEK, order_date) WEEK_OF_ORDER,
+	   COUNT(order_id) OVER (PARTITION BY A.store_id, DATEPART(WEEK, order_date) COUNT_ORDER,
+	   COUNT(order_id) OVER (PARTITION BY A.store_id ORDER BY DATEPART(WEEK, order_date)) CUMULATIF_ORDER_COUNT
+FROM sale.store A, sale.orders B
+WHERE A.store_id = B.store_id
+AND YEAR(order_date) = 2018
+
+SELECT DISTINCT A.store_id, A.store_name,
+       DATEPART (WEEK, order_date) AS WEEK_OF_ORDER,
+	   COUNT(order_id) OVER (PARTITION BY A.store_id,  DATEPART (WEEK, order_date)) AS CNT_ORDER,
+	   COUNT(order_id) OVER (PARTITION BY A.store_id ORDER BY DATEPART (WEEK, order_date)) CUM_ORD_CNT
+FROM sale.store A, sale.orders B
+WHERE A.store_id = B.store_id
+AND YEAR(order_date) = 2018
+
+
+
+---Example: Calculate 7-day moving average of the number of products sold between '2018-03-12' and '2018-04-12'.
+
+WITH T1 AS
+(
+SELECT  DISTINCT order_date, 
+		SUM(quantity) OVER(PARTITION BY order_date) daily_product_count
+FROM sale.orders A, sale.order_item B
+WHERE A.order_id = B.order_id
+AND order_date BETWEEN  '2018-03-12' AND '2018-04-12'
+)
+
+SELECT order_date,
+	   daily_product_count,
+	   AVG(daily_product_count) OVER(ORDER BY order_date ROWS BETWEEN 6 PRECEDING AND CURRENT ROW) Sales_Moving_Average_7
+FROM T1
+
+
+
+
+WITH T1 AS
+(
+SELECT  DISTINCT order_date, 
+		SUM(quantity) OVER(PARTITION BY order_date) daily_product_count
+FROM sale.orders A, sale.order_item B
+WHERE A.order_id = B.order_id
+AND order_date BETWEEN  '2018-03-12' AND '2018-04-12'
+)
+
+SELECT order_date,
+	   daily_product_count,
+	   AVG(daily_product_count) OVER(ORDER BY order_date ROWS BETWEEN CURRENT ROW AND 6 FOLLOWING) Sales_Moving_Average_7
+FROM T1
+
+---Example: Write a query that returns the highest daily turnover of products 
+
+
+--iki deðiþken tanýmlayýn
+--1. deðiþken ikincisinden büyük ise iki deðiþkeni toplayýn
+--2. deðiþken birincisinden büyük ise 2. deðiþkenden 1. deðiþkeni çýkarýn
+--1. deðiþken 2. deðiþkene eþit ise iki deðiþkeni çarpýn
+
+DECLARE @V1 INT, @V2 INT
+	SELECT @V1 = 6, @V2 = 6
+
+,IF @V1 > @V2 
+	SELECT @V1 + @V2 AS Toplam
+
+ELSE IF @V2 > @V1
+	SELECT @V2-@V1 AS Fark
+
+ELSE 
+SELECT @V1* @V2 AS Çarpým
+
+DECLARE @DAY DATE
+DECLARE @Count_order INT
+SET @DAY = '2019-10-12'
+
+SELECT @Count_order = COUNT(order_id)
+FROM sale.orders
+WHERE order_date = @DAY
+
+IF @Count_order < 5
+PRINT 'lower than 5'
+ELSE IF @Count_order BETWEEN 5 AND 10
+SELECT @Count_order Count_order
+ELSE PRINT 'upper than 10'
+
+
+
+
+
+DECLARE @DAY DATE
+DECLARE @CNTORDER INT
+SET @DAY = '2022-10-03'
+SELECT	@CNTORDER = COUNT (order_id)
+FROM	sale.orders
+WHERE	order_date = @DAY
+IF @CNTORDER < 2
+	PRINT 'lower than 5'
+ELSE IF @CNTORDER BETWEEN 2 AND 3
+	SELECT @CNTORDER cnt_order
+ELSE	PRINT 'upper than 10'
+
+
+DECLARE @Counter INT = 1
+WHILE @Counter < 21
+BEGIN
+	PRINT @Counter
+	SET @Counter = @Counter +1
+END
 
 
